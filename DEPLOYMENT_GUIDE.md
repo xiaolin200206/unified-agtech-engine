@@ -84,6 +84,7 @@ Recommended for local development, rapid prototyping, and dataset collection.
 
 # 1. Deploy the Target Pipeline (Choose Your Engine)
 This edge architecture is highly modular. Depending on your specific agricultural use case, please clone the corresponding repository and execute the designated core script:
+
 **🎯 Option A: Object Detection Engine (YOLO)**
 *Optimized for localized bounding-box detection (e.g., Durian fungal spots).*
 ```bash
