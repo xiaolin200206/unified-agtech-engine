@@ -1,123 +1,254 @@
-A robust, commercial-grade Edge AI platform designed for real-time agricultural disease and pest monitoring. Supports seamless switching between Image Classification (e.g., MobileNet for micro-pests) and Object Detection (e.g., YOLOv8 for fungal spots) on edge devices (Raspberry Pi 5 / NVIDIA Jetson), with built-in Enterprise SaaS capabilities.
+# Unified AgTech Edge AI Engine
 
-🔄 The Complete AI Lifecycle
+**Real-time agricultural disease and pest detection on resource-constrained edge devices.**
 
-To bridge the domain gap between controlled greenhouse environments and dynamic edge deployments, this system is governed by two distinct pipelines:
+A production-grade Edge AI platform developed during an internship at Urban Farm Tech (Jan–Apr 2026). Designed for commercial greenhouse deployments with zero cloud dependency, built around YOLOv8 object detection running on Raspberry Pi 5.
 
-1. MLOps Training Pipeline (Offline / Cloud)  
-How we build the model before edge deployment:  
-Data Collection (1080p Greenhouse Videos) → Frame Extraction & Grid Cropping → Human-in-the-Loop Labeling → Albumentations (Augmentation) → Transfer Learning (MobileNetV2/YOLO) → ONNX Export  
+> **Research Note:** The engineering challenges documented in this system — thermal management, domain shift, small object detection, and Docker containerization on ARM64 — are the subject of a peer-reviewed manuscript currently under review at *Engineering Applications of Artificial Intelligence* (Elsevier, Q1, IF: 8.0).
 
-2. Edge Inference Pipeline (Real-time on Raspberry Pi)  
-How the system executes in the physical world (Detailed below):  
-Camera Capture (1080p) → Grid Slicing (Memory Efficient) → ONNX Inference → Confidence Thresholding → Telegram Alert  
+---
 
+## What This System Does
 
-🏗️ Core Architecture (Current)
+- Captures live video from a Raspberry Pi Camera Module 3
+- Runs YOLOv8 ONNX inference at ~5.6 FPS on CPU (no GPU required)
+- Detects 5 basil disease/pest classes in real-time: Fungal, Leaf Damage, Mealybugs, Miner, Mite
+- Sends instant Telegram alerts with annotated images when disease is detected
+- Manages CPU thermal load via configurable duty-cycle scheduling
+- Logs all detections, latency, temperature, and CPU metrics to CSV
 
-1. Unified Inference Pipeline  
+---
 
-Designed to be model-agnostic. The system auto-routes the inference logic based on the loaded ONNX model topology:
+## Hardware Requirements
 
-Classification Mode (MobileNet/ResNet):  
-Pipeline: 1080p Extraction → Grid Patch Cropping → Resize(224) → Normalize → Softmax  
+| Component | Specification |
+|-----------|--------------|
+| Edge Device | Raspberry Pi 5 (8GB RAM) |
+| Camera | Raspberry Pi Camera Module 3 (12MP, autofocus) |
+| OS | Raspberry Pi OS (64-bit) |
+| Storage | 32GB+ microSD |
+| Power | Official 27W USB-C PSU recommended |
 
-Use Case: Micro-pests (Mites), global leaf health assessment.  
+---
 
-Architectural Note: Introduced Grid-based Patch Cropping to completely eliminate the "pixel evaporation" effect when squashing full HD frames. This preserves high-fidelity features for extremely small objects, drastically reducing false positives caused by background noise.  
-
-Detection Mode (YOLOv8/v11):  
-Pipeline: Resize(640, keep_ratio) → Padding → NMS (Non-Maximum Suppression) → Bounding Box Output  
-
-Use Case: Localized fungal spots, fruit disease counting (e.g., Durian/Tomato).  
-
-
-2. Edge Device Management (systemd)
-
-Multi-tenant Service Switching: Seamlessly switch between different agricultural deployment configurations without rebooting:
+## Software Requirements
 
 ```bash
-sudo systemctl start farm_basil_class.service   # Run Basil Classification
-sudo systemctl start farm_durian_det.service    # Run Durian Detection
+Python 3.9+
+ultralytics>=8.0
+opencv-python-headless
+picamera2
+numpy
+requests
+psutil
+```
 
-Thermal & Duty Cycle Control: Configurable ACTIVE_SEC and SLEEP_SEC to prevent Edge CPU thermal throttling (Limit: 82°C) in harsh greenhouse environments.
-
-Containerized Deployment (Docker)
-
-Unified Dockerfile supporting OpenCV (Camera/Video) and ONNX Runtime.
-
-Headless execution with volume mapping for local telemetry logs (/app/logs).
-
-🚀 Enterprise SaaS Roadmap (The Data Flywheel)
-
-Note for Deployment: The following modules are designed for B2B commercialization and subscription-based deployment.
-
-Phase 1: Edge Security & DRM (Hardware ID Binding)
-Strictly binds ONNX model decryption and script execution to the specific Raspberry Pi MAC address + CPU Serial Number, preventing unauthorized SD card cloning.
-
-Phase 2: Cloud Telemetry (Real-time Sync)
-Edge devices push live metrics (CPU%, Temp, Uptime, Inference FPS) to a centralized Cloud Dashboard via MQTT/WebSockets.
-
-Phase 3: Active Learning & Smart Hard-Mining
-If model confidence is ambiguous (e.g., 0.40 - 0.70), the edge device auto-saves the high-res patch. These edge cases are pushed to AWS S3 during network idle time for Human-in-the-loop (HITL) re-labeling and CI/CD model OTA updates.
-
-📂 Project Structure
-
-edge_ai_core/
-├── core_inference.py
-├── weights/
-│   ├── mobilenet_v2_basil.onnx
-│   └── yolov8_durian.onnx
-├── configs/
-├── requirements.txt
-├── farm_logs/
-├── docker_env/
-└── README.md
-
-⚙️ Model Configuration (config.yaml)
-
-System configurations are decoupled for easy SaaS deployment:
-
-mode: "classification"      # or "detection"
-model_path: "weights/mobilenet_v2_basil.onnx"
-input_size: [224, 224]      # [640, 640] for YOLO
-confidence_threshold: 0.70
-
-# Patch Cropping (For micro-pests in classification mode)
-enable_patch_crop: True
-patch_size: [400, 400]
-
-# Duty Cycle & Thermal Limits
-cycle_active_sec: 60
-cycle_sleep_sec: 15
-max_temp_limit: 82.0
-
-# DRM & Cloud (WIP)
-hwid_check: False
-cloud_sync_url: "wss://api.urbanfarm.tech/stream"
-
-🛠️ Quick Start
-
-Clone & Setup
-
-git clone https://github.com/YOUR_USERNAME/edge-ai-core.git
-cd edge-ai-core
+Install dependencies:
+```bash
 pip install -r requirements.txt
+```
 
-Run via Docker (with display)
+---
 
-docker run -it --rm \
---device /dev/video0 \
--e DISPLAY=$DISPLAY \
--v /tmp/.X11-unix:/tmp/.X11-unix \
--v $(pwd)/farm_logs:/app/logs \
---name farm-edge-container \
-farm-ai-core
+## Project Structure
 
-⚠️ Known Limitations
+```
+unified-agtech-engine/
+├── basil.py              # Main inference script
+├── basil.onnx            # YOLOv8 ONNX model (not included in repo)
+├── requirements.txt
+├── basil_logs/           # Auto-generated session logs
+│   └── session_YYYYMMDD_HHMMSS/
+│       ├── basil_data.csv
+│       └── images/
+└── README.md
+```
 
-Small Object Feature Collapse vs. Compute Trade-off:
-Pure classification networks struggle with micro-pests when resizing full HD frames. This is heavily mitigated via our Grid Patch Cropping pipeline, which introduces a slight CPU overhead tradeoff (processing 4–6 patches per frame instead of 1).
+---
 
-Out-of-Distribution (OOD) Rejection:
-The classification module has limited rejection mechanisms for OOD inputs compared to detection models. It is optimized for fixed greenhouse camera deployments with relatively stable backgrounds.
+## Quick Start
+
+**1. Clone the repo**
+```bash
+git clone https://github.com/xiaolin200206/unified-agtech-engine.git
+cd unified-agtech-engine
+```
+
+**2. Add your model**
+```bash
+# Place your basil.onnx in the project root
+# Or download via:
+wget "YOUR_MODEL_URL" -O basil.onnx
+```
+
+**3. Configure Telegram (optional)**
+
+Edit `basil.py` and set your bot token and chat ID:
+```python
+TELEGRAM_BOT_TOKEN = "your_bot_token"
+TELEGRAM_CHAT_ID = "your_chat_id"
+```
+
+**4. Run**
+```bash
+python3 basil.py
+```
+
+Press `q` to quit.
+
+---
+
+## Configuration
+
+All parameters are at the top of `basil.py`:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `CONFIDENCE_THRESHOLD` | 0.40 | Minimum detection confidence |
+| `INFERENCE_SIZE` | 640 | Input resolution for YOLOv8 |
+| `CYCLE_ACTIVE_SEC` | 180 | Active inference duration per cycle |
+| `CYCLE_SLEEP_SEC` | 45 | Sleep duration per cycle |
+| `MAX_TEMP_LIMIT` | 82.0°C | CPU overheat protection threshold |
+| `TELEGRAM_COOLDOWN_SEC` | 60.0 | Minimum interval between alerts |
+| `SAVE_IMG_INTERVAL` | 2.0s | Minimum interval between saved images |
+
+---
+
+## Detection Classes
+
+| Class | Description |
+|-------|-------------|
+| Fungal | Fungal leaf infections |
+| Leaf Damage | Physical or environmental leaf damage |
+| Mealybugs | Mealybug pest infestation |
+| Miner | Leaf miner pest damage |
+| Mite | Spider mite damage (small white spots) |
+
+---
+
+## System Architecture
+
+```
+Camera (1080p) → Frame Capture → YOLOv8s ONNX Inference
+                                        ↓
+                              Confidence Thresholding (≥0.40)
+                                        ↓
+                    ┌───────────────────┴───────────────────┐
+                    ↓                                       ↓
+            CSV Logging                          Telegram Alert
+        (latency, FPS, temp)                 (annotated image + metadata)
+```
+
+**Duty Cycle Thermal Management:**
+```
+[Active 180s] → [Sleep 45s] → [Active 180s] → ...
+     ↑ inference runs              ↑ CPU cools down
+```
+
+This prevents thermal throttling (observed at >82°C) which causes inference latency to become unpredictable. Without scheduling, 66.2% of frames were affected by throttling in field tests.
+
+---
+
+## Architecture Evolution: From Classification to Detection
+
+This system went through a critical architectural pivot during development. Understanding this evolution explains why the current design is built the way it is.
+
+### v1: MobileNetV2 Classification
+
+The initial approach used MobileNetV2 as an image classifier — the entire 640x640 frame was resized to 224x224 and passed through the network to produce a single disease label.
+
+**What went wrong:**
+- The classifier had no spatial awareness. It could say "there is a miner" but not *where* on the leaf.
+- Resizing a full HD frame to 224x224 caused severe **pixel evaporation** — tiny features like mite white spots and mealybug colonies were compressed into just a few pixels and became unrecognizable.
+- False positives spiked when background elements (soil, reflections, clothing) dominated the frame.
+- The system was fundamentally unsuitable for a fixed overhead camera watching multiple plants simultaneously.
+
+**Conclusion:** Classification is appropriate for single-leaf, close-up mobile capture (like PlantVillage-style apps). It is not suitable for continuous overhead greenhouse monitoring.
+
+### v2: YOLOv8s Object Detection (Current)
+
+Switching to YOLOv8s object detection solved the core problems:
+
+- **Spatial localization:** Each detection produces a bounding box, so the system knows exactly which leaf region is affected.
+- **Multi-instance detection:** Multiple disease instances across multiple plants are detected in a single inference pass.
+- **Better small object handling:** YOLOv8's multi-scale feature pyramid (FPN) retains more spatial detail for small targets than a flat classifier.
+- **Practical FPS:** YOLOv8s achieves ~5.6 FPS on Raspberry Pi 5 CPU — sufficient for greenhouse monitoring where disease progression is measured in hours, not seconds.
+
+**Trade-off acknowledged:** Mite damage (small white spots) and mealybugs remain challenging at standard operating distances due to their physical size — this is a hardware constraint, not a model failure. Close-range inspection or higher resolution cameras are recommended for these classes.
+
+### Architecture Design: Model-Agnostic Core
+
+The inference pipeline is designed to support both modes, allowing future switching without rewriting the deployment stack:
+
+| Mode | Model | Input | Output | Best For |
+|------|-------|-------|--------|----------|
+| Classification | MobileNetV2 | 224x224 patch | Class label + confidence | Single leaf, close-up |
+| Detection | YOLOv8s | 640x640 frame | Bounding boxes + labels | Multi-plant, overhead camera |
+
+---
+
+## Key Engineering Findings
+
+**Docker reduces CPU load by 49.1%**
+Containerized execution on ARM64 using `python:3.9-slim-bullseye` eliminated background OS processes, reducing CPU utilization from ~85% to ~43% and peak temperature from 76.2°C to 60.9°C.
+
+**Real data outperforms proxy-augmented data**
+A model trained exclusively on 1,710 real greenhouse images achieved 99.13% validation accuracy, versus 97.82% for a model augmented with web-scraped proxy images — demonstrating the risk of domain shift in practical deployments.
+
+**Small object limitations**
+Mite damage (small white spots) and mealybugs remain challenging at standard operating distances. Recommend close-range inspection or higher-resolution capture for these classes. This is a known hardware constraint, not a model failure.
+
+---
+
+## Known Limitations
+
+- **Mite & Mealybug detection**: Performance degrades at distances >30cm due to small object size. Camera Module 3 autofocus helps but does not fully resolve this.
+- **OOD rejection**: The system has limited rejection for out-of-distribution inputs (e.g., reflective clothing, dramatic lighting changes). Fixed camera positioning minimizes this.
+- **Single crop**: Model is trained on basil only. Not suitable for other crops without retraining.
+
+---
+
+## Training Pipeline (Offline)
+
+The model was trained using the following pipeline:
+
+```
+Field Data Collection (Greenhouse, 3 weeks)
+        ↓
+Manual Annotation (CVAT platform)
+        ↓
+Augmentation (Albumentations)
+        ↓
+YOLOv8s Transfer Learning (PyTorch)
+        ↓
+ONNX Export (ARM64-optimized)
+        ↓
+Edge Deployment (Raspberry Pi 5)
+```
+
+**Dataset:** 1,710 images, 6 classes, collected on-site at Urban Farm Tech commercial greenhouse, Kuala Lumpur, Malaysia.
+
+---
+
+## Roadmap
+
+- [ ] Active Learning pipeline (auto-save ambiguous detections for HITL relabeling)
+- [ ] OTA model update via scheduled download script
+- [ ] LoRa-based offline alerting for connectivity-limited farms
+- [ ] Multi-crop support (Durian, Tomato)
+- [ ] Hardware ID binding for commercial deployment (DRM)
+
+---
+
+## Author
+
+**Lim Ding Shan**
+AI Development Intern, Urban Farm Tech (Jan–Apr 2026)
+GitHub: [xiaolin200206](https://github.com/xiaolin200206)
+Email: l1055505011@gmail.com
+
+---
+
+## License
+
+This project was developed during an internship at Urban Farm Tech, Malaysia. The model weights (`basil.onnx`) and training dataset are proprietary and not included in this repository.
