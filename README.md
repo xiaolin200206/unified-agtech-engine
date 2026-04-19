@@ -242,7 +242,7 @@ Edge Deployment (Raspberry Pi 5)
 
 ## Author
 
-**Lim Ding Shan**
+**Lin Ding Shan**
 AI Development Intern, Urban Farm Tech (Jan–Apr 2026)
 GitHub: [xiaolin200206](https://github.com/xiaolin200206)
 Email: l1055505011@gmail.com
